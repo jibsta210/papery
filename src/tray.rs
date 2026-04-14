@@ -101,18 +101,24 @@ impl ksni::Tray for PaperyTray {
 }
 
 pub fn spawn_tray(paused: Arc<AtomicBool>) {
-    let tray = PaperyTray { paused };
-
     tokio::spawn(async move {
-        match tray.spawn().await {
-            Ok(_handle) => {
-                tracing::info!("System tray icon registered");
-                // Keep handle alive forever — dropping it kills the tray
-                std::future::pending::<()>().await;
-            }
-            Err(e) => {
-                tracing::error!("Failed to start tray: {e}");
+        // Retry loop — StatusNotifierWatcher may not be ready at boot
+        for attempt in 1..=30 {
+            let tray = PaperyTray {
+                paused: paused.clone(),
+            };
+            match tray.spawn().await {
+                Ok(_handle) => {
+                    tracing::info!("System tray icon registered (attempt {attempt})");
+                    std::future::pending::<()>().await;
+                    return;
+                }
+                Err(e) => {
+                    tracing::warn!("Tray attempt {attempt}/30 failed: {e}");
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
             }
         }
+        tracing::error!("Failed to start tray after 30 attempts");
     });
 }
