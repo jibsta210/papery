@@ -66,6 +66,14 @@ impl From<std::io::Error> for ProviderError {
     }
 }
 
+/// Shared HTTP client with a 15-second timeout to prevent hangs.
+pub fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap_or_default()
+}
+
 pub trait WallpaperProvider: Send + Sync {
     fn kind(&self) -> SourceKind;
     fn name(&self) -> &str;

@@ -36,7 +36,7 @@ impl WallpaperProvider for BingProvider {
             let url = format!(
                 "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n={n}&mkt=en-US"
             );
-            let resp: BingResponse = reqwest::get(&url).await?.json().await?;
+            let resp: BingResponse = super::http_client().get(&url).send().await?.json().await?;
 
             let wallpapers = resp
                 .images

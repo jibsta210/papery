@@ -33,7 +33,7 @@ impl WallpaperProvider for EarthViewProvider {
         Box::pin(async move {
             let url =
                 "https://new-images-preview-dot-earth-viewer.appspot.com/_api/photos.json";
-            let entries: Vec<EarthViewEntry> = reqwest::get(url).await?.json().await?;
+            let entries: Vec<EarthViewEntry> = super::http_client().get(url).send().await?.json().await?;
 
             use rand::seq::SliceRandom;
             let mut rng = rand::rng();

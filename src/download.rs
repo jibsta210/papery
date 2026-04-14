@@ -64,10 +64,28 @@ impl DownloadManager {
             return Ok(cached);
         }
 
-        // Download the image
+        // Download the image (with timeout and size limit to prevent hangs/OOM)
         tracing::info!("Downloading: {}", wallpaper.url);
-        let response = reqwest::get(&wallpaper.url).await?;
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_default();
+        let response = client.get(&wallpaper.url).send().await?;
+        let content_length = response.content_length().unwrap_or(0);
+        const MAX_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+        if content_length > MAX_SIZE {
+            return Err(DownloadError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Image too large: {} bytes (max {})", content_length, MAX_SIZE),
+            )));
+        }
         let bytes = response.bytes().await?;
+        if bytes.len() as u64 > MAX_SIZE {
+            return Err(DownloadError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Downloaded image exceeds size limit",
+            )));
+        }
 
         let mut file = fs::File::create(&cached).await?;
         file.write_all(&bytes).await?;

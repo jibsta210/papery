@@ -2,7 +2,14 @@ use std::path::Path;
 
 /// Analyze the brightness of an image on a scale from 0.0 (dark) to 1.0 (light).
 pub fn analyze_brightness(image_path: &Path) -> Result<f64, image::ImageError> {
+    // Guard against excessively large files (>100MB) that could OOM during decode
+    if let Ok(meta) = std::fs::metadata(image_path) {
+        if meta.len() > 100 * 1024 * 1024 {
+            return Ok(0.5); // assume neutral brightness for huge files
+        }
+    }
     let img = image::open(image_path)?;
+    // Thumbnail to 64x64 first to cap memory usage regardless of input resolution
     let small = img.thumbnail(64, 64);
     let gray = small.to_luma8();
     let total: u64 = gray.pixels().map(|p| p.0[0] as u64).sum();

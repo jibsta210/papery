@@ -50,7 +50,7 @@ impl WallpaperProvider for WallhavenProvider {
             let url = format!(
                 "https://wallhaven.cc/api/v1/search?categories={categories}&purity={purity}&sorting=toplist&topRange=1M&atleast=1920x1080"
             );
-            let resp: WallhavenResponse = reqwest::get(&url).await?.json().await?;
+            let resp: WallhavenResponse = super::http_client().get(&url).send().await?.json().await?;
 
             let wallpapers = resp
                 .data

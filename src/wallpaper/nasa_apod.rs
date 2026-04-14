@@ -40,7 +40,7 @@ impl WallpaperProvider for NasaApodProvider {
             let url = format!(
                 "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&count={n}&thumbs=false"
             );
-            let entries: Vec<ApodEntry> = reqwest::get(&url).await?.json().await?;
+            let entries: Vec<ApodEntry> = super::http_client().get(&url).send().await?.json().await?;
 
             let wallpapers = entries
                 .into_iter()

@@ -64,20 +64,22 @@ async fn background_loop() {
                 }
 
                 if let Some(mut wp) = queue.pop_front() {
-                    if let Ok(path) = dm.download(&mut wp).await {
-                        if config.theme_filter != "any" {
-                            if let Ok(b) = tokio::task::spawn_blocking({
-                                let p = path.clone();
-                                move || brightness::analyze_brightness(&p)
-                            }).await {
-                                if let Ok(b) = b {
-                                    if !brightness::matches_theme(b, config.brightness_threshold, &config.theme_filter) {
-                                        continue;
-                                    }
-                                }
+                    match dm.download(&mut wp).await {
+                        Ok(path) => {
+                            if config.theme_filter != "any" {
+                                let skip = match tokio::task::spawn_blocking({
+                                    let p = path.clone();
+                                    move || brightness::analyze_brightness(&p)
+                                }).await {
+                                    Ok(Ok(b)) => !brightness::matches_theme(b, config.brightness_threshold, &config.theme_filter),
+                                    Ok(Err(e)) => { tracing::warn!("Brightness analysis failed: {e}"); false }
+                                    Err(e) => { tracing::warn!("Brightness task panicked: {e}"); false }
+                                };
+                                if skip { continue; }
                             }
+                            let _ = background::set_wallpaper(&path, &config.scaling_mode);
                         }
-                        let _ = background::set_wallpaper(&path, &config.scaling_mode);
+                        Err(e) => tracing::warn!("Download failed: {e}"),
                     }
                 }
             }
