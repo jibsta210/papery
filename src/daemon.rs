@@ -85,11 +85,18 @@ async fn background_loop() {
             Some(action) = tray_rx.recv() => {
                 match action {
                     TrayAction::ShowWindow => {
-                        // Launch GUI in a new process group so it survives our death
+                        tracing::info!("Tray: ShowWindow received, launching GUI");
                         use std::os::unix::process::CommandExt;
-                        let _ = std::process::Command::new("papery")
+                        // systemd-run gives the new process proper session context
+                        // so Wayland allows it to show a window
+                        match std::process::Command::new("systemd-run")
+                            .args(["--user", "--scope", "papery"])
                             .process_group(0)
-                            .spawn();
+                            .spawn()
+                        {
+                            Ok(_) => tracing::info!("Tray: GUI process spawned"),
+                            Err(e) => tracing::error!("Tray: Failed to spawn GUI: {e}"),
+                        }
                     }
                     TrayAction::NextWallpaper => {
                         if queue.is_empty() {

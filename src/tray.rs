@@ -33,6 +33,8 @@ struct PaperyTray {
 }
 
 impl ksni::Tray for PaperyTray {
+    const MENU_ON_ACTIVATE: bool = true;
+
     fn id(&self) -> String {
         "dev-papery".to_string()
     }
