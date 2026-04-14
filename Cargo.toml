@@ -1,0 +1,56 @@
+[package]
+name = "papery"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "A COSMIC wallpaper changer application"
+
+[[bin]]
+name = "papery"
+path = "src/main.rs"
+
+[dependencies]
+# COSMIC
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = [
+    "tokio",
+    "wayland",
+    "winit",
+    "dbus-config",
+] }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-bg-config = { git = "https://github.com/pop-os/cosmic-bg" }
+
+# Async / networking
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Image processing
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+# i18n
+i18n-embed = { version = "0.16", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-log = "0.2"
+
+# System tray
+ksni = "0.3"
+
+# Process management
+libc = "0.2"
+
+# Misc
+rand = "0.9"
+directories = "6"
+sha2 = "0.10"
+
+[profile.release]
+opt-level = 1

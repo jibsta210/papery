@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Papery
+Comment=Automatic wallpaper changer for COSMIC
+Type=Application
+Exec=papery
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=wallpaper;background;variety;
+Icon=dev.papery.CosmicApplet
+StartupNotify=true

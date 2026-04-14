@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#63B3ED" opacity="0.15"/>
+
+  <!-- Mountain/landscape (wallpaper symbol) -->
+  <path d="M8 48 L22 28 L30 38 L38 24 L56 48 Z" fill="#63B3ED" opacity="0.6"/>
+  <path d="M8 48 L18 34 L28 48 Z" fill="#4299E1" opacity="0.8"/>
+
+  <!-- Sun -->
+  <circle cx="46" cy="18" r="6" fill="#F6AD55" opacity="0.9"/>
+
+  <!-- Frame border (picture frame) -->
+  <rect x="6" y="10" width="52" height="44" rx="3" ry="3" fill="none" stroke="#4A5568" stroke-width="3"/>
+
+  <!-- Rotation arrows (auto-change symbol) -->
+  <path d="M50 6 C54 6 58 10 58 14" fill="none" stroke="#63B3ED" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M56 5 L58 14 L52 10" fill="#63B3ED"/>
+
+  <path d="M14 58 C10 58 6 54 6 50" fill="none" stroke="#63B3ED" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M8 59 L6 50 L12 54" fill="#63B3ED"/>
+</svg>

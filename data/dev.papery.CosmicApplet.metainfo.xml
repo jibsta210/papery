@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.papery.CosmicApplet</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <name>Papery</name>
+  <summary>Automatic wallpaper changer for COSMIC Desktop</summary>
+
+  <description>
+    <p>
+      Papery is a native wallpaper changer for the COSMIC desktop environment.
+      It automatically rotates your desktop background using beautiful images from
+      multiple online sources, running quietly in your system tray.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Multiple wallpaper sources: Bing Photo of the Day, NASA Astronomy Picture of the Day, Wallhaven, Google Earth View, and local folders</li>
+      <li>Configurable rotation interval with hours/minutes/seconds precision</li>
+      <li>Light/dark theme filtering based on image brightness analysis</li>
+      <li>System tray integration with quick controls (next, pause, resume)</li>
+      <li>Background daemon mode — keeps rotating wallpapers after closing the window</li>
+      <li>Wallpaper history and favorites</li>
+      <li>Multiple scaling modes: Zoom, Fit, Stretch</li>
+      <li>Smart download caching to save bandwidth</li>
+    </ul>
+  </description>
+
+  <developer id="dev.papery">
+    <name>Papery Contributors</name>
+  </developer>
+
+  <url type="homepage">https://github.com/jakes/papery</url>
+  <url type="bugtracker">https://github.com/jakes/papery/issues</url>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-04-13">
+      <description>
+        <p>Initial release with Bing, NASA APOD, Wallhaven, Earth View, and local folder sources.</p>
+      </description>
+    </release>
+  </releases>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+</component>

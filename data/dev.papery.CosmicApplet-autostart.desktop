@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Papery
+Comment=Automatic wallpaper changer for COSMIC
+Type=Application
+Exec=papery --bg
+Terminal=false
+Icon=dev.papery.CosmicApplet
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
