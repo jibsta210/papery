@@ -85,8 +85,11 @@ async fn background_loop() {
             Some(action) = tray_rx.recv() => {
                 match action {
                     TrayAction::ShowWindow => {
-                        // Launch GUI — it will kill us via the lock file
-                        let _ = std::process::Command::new("papery").spawn();
+                        // Launch GUI in a new process group so it survives our death
+                        use std::os::unix::process::CommandExt;
+                        let _ = std::process::Command::new("papery")
+                            .process_group(0)
+                            .spawn();
                     }
                     TrayAction::NextWallpaper => {
                         if queue.is_empty() {
