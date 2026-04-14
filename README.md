@@ -27,7 +27,7 @@ Papery automatically rotates your desktop background using images from multiple 
 sudo apt install cargo cmake just libexpat1-dev libfontconfig-dev libfreetype-dev libxkbcommon-dev pkg-config
 
 # Build and install
-git clone https://github.com/jakes/papery.git
+git clone https://github.com/jibsta210/papery.git
 cd papery
 just install
 ```
@@ -35,7 +35,7 @@ just install
 ### Arch / CachyOS
 
 ```bash
-git clone https://github.com/jakes/papery.git
+git clone https://github.com/jibsta210/papery.git
 cd papery
 cargo build --release
 sudo install -Dm755 target/release/papery /usr/local/bin/papery
