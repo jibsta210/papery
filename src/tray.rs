@@ -1,9 +1,20 @@
 use ksni::{self, menu::StandardItem, ToolTip, TrayMethods};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, OnceLock,
 };
 use tokio::sync::mpsc;
+
+/// Global counter shared between daemon/GUI and the tray icon.
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+pub fn set_counter(n: u64) {
+    COUNTER.store(n, Ordering::Relaxed);
+}
+
+pub fn counter() -> u64 {
+    COUNTER.load(Ordering::Relaxed)
+}
 
 #[derive(Debug, Clone)]
 pub enum TrayAction {
@@ -53,8 +64,14 @@ impl ksni::Tray for PaperyTray {
         } else {
             "Running"
         };
+        let count = counter();
+        let title = if count > 0 {
+            format!("Papery - {status} (#{count})")
+        } else {
+            format!("Papery - {status}")
+        };
         ToolTip {
-            title: format!("Papery - {status}"),
+            title,
             description: String::new(),
             icon_name: String::new(),
             icon_pixmap: Vec::new(),

@@ -47,8 +47,10 @@ impl WallpaperProvider for WallhavenProvider {
         let categories = self.categories.clone();
         let purity = self.purity.clone();
         Box::pin(async move {
+            // Use random sorting with a fresh seed each call for variety.
+            let seed: u32 = rand::random();
             let url = format!(
-                "https://wallhaven.cc/api/v1/search?categories={categories}&purity={purity}&sorting=toplist&topRange=1M&atleast=1920x1080"
+                "https://wallhaven.cc/api/v1/search?categories={categories}&purity={purity}&sorting=random&seed={seed}&atleast=1920x1080"
             );
             let resp: WallhavenResponse = super::http_client().get(&url).send().await?.json().await?;
 

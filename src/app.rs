@@ -10,6 +10,8 @@ use crate::wallpaper::bing::BingProvider;
 use crate::wallpaper::earth_view::EarthViewProvider;
 use crate::wallpaper::local::LocalProvider;
 use crate::wallpaper::nasa_apod::NasaApodProvider;
+use crate::wallpaper::pexels::PexelsProvider;
+use crate::wallpaper::unsplash::UnsplashProvider;
 use crate::wallpaper::wallhaven::WallhavenProvider;
 use crate::wallpaper::{WallpaperInfo, WallpaperProvider};
 use cosmic::iced::futures::{self, stream};
@@ -34,6 +36,8 @@ pub struct Papery {
     pub history: Vec<WallpaperInfo>,
     pub history_index: usize,
     wallpaper_queue: VecDeque<WallpaperInfo>,
+    seen_urls: std::collections::HashSet<String>,
+    pub total_shown: u64,
 
     // Timer state
     pub seconds_until_next: u64,
@@ -80,6 +84,8 @@ pub enum Message {
     ToggleSourceWallhaven,
     ToggleSourceEarthView,
     ToggleSourceLocal,
+    ToggleSourceUnsplash,
+    ToggleSourcePexels,
     SetRotationInterval(u64),
     SetIntervalHours(String),
     SetIntervalMinutes(String),
@@ -168,6 +174,8 @@ impl cosmic::Application for Papery {
             history: Vec::new(),
             history_index: 0,
             wallpaper_queue: VecDeque::new(),
+            seen_urls: std::collections::HashSet::new(),
+            total_shown: 0,
             seconds_until_next: 0,
             last_tick: None,
             download_manager,
@@ -296,6 +304,14 @@ impl cosmic::Application for Papery {
 
             Message::WallpaperReady(result) => match result {
                 Ok(wp) => {
+                    let key = wallpaper_key(&wp);
+                    if self.seen_urls.len() >= 1000 {
+                        self.seen_urls.clear();
+                    }
+                    self.seen_urls.insert(key);
+                    self.total_shown += 1;
+                    tray::set_counter(self.total_shown);
+
                     self.current_wallpaper = Some(wp.clone());
                     self.history.push(wp.clone());
                     self.history_index = self.history.len() - 1;
@@ -345,6 +361,14 @@ impl cosmic::Application for Papery {
             }
             Message::ToggleSourceLocal => {
                 self.config.source_local = !self.config.source_local;
+                self.save_config();
+            }
+            Message::ToggleSourceUnsplash => {
+                self.config.source_unsplash = !self.config.source_unsplash;
+                self.save_config();
+            }
+            Message::ToggleSourcePexels => {
+                self.config.source_pexels = !self.config.source_pexels;
                 self.save_config();
             }
             Message::SetRotationInterval(secs) => {
@@ -438,6 +462,17 @@ impl cosmic::Application for Papery {
             );
         }
 
+        if self.total_shown > 0 {
+            elements.push(
+                widget::text::caption(format!(
+                    "  #{}  ·  queue: {}",
+                    self.total_shown,
+                    self.wallpaper_queue.len()
+                ))
+                .into(),
+            );
+        }
+
         elements
     }
 
@@ -490,6 +525,16 @@ impl cosmic::Application for Papery {
         let tray_sub = Subscription::run(tray_subscription).map(Message::Tray);
 
         Subscription::batch([timer, tray_sub])
+    }
+}
+
+fn wallpaper_key(wp: &WallpaperInfo) -> String {
+    if !wp.url.is_empty() {
+        wp.url.clone()
+    } else if let Some(ref p) = wp.local_path {
+        p.to_string_lossy().to_string()
+    } else {
+        wp.title.clone()
     }
 }
 
@@ -548,6 +593,12 @@ impl Papery {
                 .collect();
             providers.push(Box::new(LocalProvider::new(folders)));
         }
+        if self.config.source_unsplash {
+            providers.push(Box::new(UnsplashProvider::new(&self.config.unsplash_topic)));
+        }
+        if self.config.source_pexels && !self.config.pexels_api_key.is_empty() {
+            providers.push(Box::new(PexelsProvider::new(&self.config.pexels_api_key)));
+        }
 
         providers
     }
@@ -588,7 +639,16 @@ impl Papery {
     }
 
     fn set_next_wallpaper(&mut self) -> app::Task<Message> {
-        if let Some(mut wp) = self.wallpaper_queue.pop_front() {
+        // Pop until we find one we haven't shown yet
+        let mut chosen: Option<WallpaperInfo> = None;
+        while let Some(wp) = self.wallpaper_queue.pop_front() {
+            let key = wallpaper_key(&wp);
+            if !self.seen_urls.contains(&key) {
+                chosen = Some(wp);
+                break;
+            }
+        }
+        if let Some(mut wp) = chosen {
             let cache_dir = self.download_manager.cache_dir.clone();
             let theme_filter = self.config.theme_filter.clone();
             let brightness_threshold = self.config.brightness_threshold;

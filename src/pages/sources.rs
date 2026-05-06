@@ -42,6 +42,18 @@ pub fn view(config: &PaperyConfig) -> Element<'_, Message> {
             config.source_local,
             Message::ToggleSourceLocal,
         ))
+        .push(source_toggle(
+            "Unsplash".to_string(),
+            "High-quality photography (no API key needed)".to_string(),
+            config.source_unsplash,
+            Message::ToggleSourceUnsplash,
+        ))
+        .push(source_toggle(
+            "Pexels".to_string(),
+            "Curated stock photography (API key required, free)".to_string(),
+            config.source_pexels,
+            Message::ToggleSourcePexels,
+        ))
         .spacing(spacing.space_xs)
         .width(Length::Fill)
         .padding(spacing.space_m);

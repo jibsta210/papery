@@ -2,6 +2,8 @@ pub mod bing;
 pub mod earth_view;
 pub mod local;
 pub mod nasa_apod;
+pub mod pexels;
+pub mod unsplash;
 pub mod wallhaven;
 
 use std::path::PathBuf;
@@ -13,6 +15,8 @@ pub enum SourceKind {
     Wallhaven,
     EarthView,
     Local,
+    Unsplash,
+    Pexels,
 }
 
 impl SourceKind {
@@ -23,6 +27,8 @@ impl SourceKind {
             Self::Wallhaven => "Wallhaven",
             Self::EarthView => "Google Earth View",
             Self::Local => "Local Folders",
+            Self::Unsplash => "Unsplash",
+            Self::Pexels => "Pexels",
         }
     }
 }

@@ -31,10 +31,15 @@ impl WallpaperProvider for BingProvider {
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<Vec<WallpaperInfo>, ProviderError>> + Send>,
     > {
-        let n = count.min(8); // Bing returns max 8
+        let n = count.min(8);
         Box::pin(async move {
+            // Random idx 0..7 to vary which day's archive we start from.
+            // Bing only keeps ~8 days, but combined with markets gives some variety.
+            let markets = ["en-US", "en-GB", "en-CA", "en-AU", "ja-JP", "de-DE", "fr-FR", "zh-CN"];
+            let mkt = markets[(rand::random::<u32>() as usize) % markets.len()];
+            let idx = rand::random::<u32>() % 7;
             let url = format!(
-                "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n={n}&mkt=en-US"
+                "https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n={n}&mkt={mkt}"
             );
             let resp: BingResponse = super::http_client().get(&url).send().await?.json().await?;
 

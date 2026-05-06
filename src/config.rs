@@ -13,6 +13,13 @@ pub struct PaperyConfig {
     pub source_wallhaven: bool,
     pub source_earthview: bool,
     pub source_local: bool,
+    pub source_unsplash: bool,
+    pub source_pexels: bool,
+
+    /// Pexels API key (free at https://www.pexels.com/api/)
+    pub pexels_api_key: String,
+    /// Unsplash search topic (e.g. "nature", "wallpapers", or empty for any)
+    pub unsplash_topic: String,
 
     /// Rotation interval in seconds
     pub rotation_interval_secs: u64,
@@ -53,6 +60,11 @@ impl Default for PaperyConfig {
             source_wallhaven: false,
             source_earthview: false,
             source_local: false,
+            source_unsplash: true,
+            source_pexels: false,
+
+            pexels_api_key: String::new(),
+            unsplash_topic: "wallpapers".to_string(),
 
             rotation_interval_secs: 1800, // 30 minutes
             paused: false,

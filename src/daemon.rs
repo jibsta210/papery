@@ -7,13 +7,18 @@ use crate::wallpaper::bing::BingProvider;
 use crate::wallpaper::earth_view::EarthViewProvider;
 use crate::wallpaper::local::LocalProvider;
 use crate::wallpaper::nasa_apod::NasaApodProvider;
+use crate::wallpaper::pexels::PexelsProvider;
+use crate::wallpaper::unsplash::UnsplashProvider;
 use crate::wallpaper::wallhaven::WallhavenProvider;
 use crate::wallpaper::{WallpaperInfo, WallpaperProvider};
 use cosmic_config::CosmicConfigEntry;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+/// Cap on remembered URLs to avoid unbounded growth.
+const SEEN_URLS_CAP: usize = 1000;
 
 /// Run Papery in headless background mode: no window, just wallpaper
 /// rotation and system tray icon.
@@ -42,6 +47,8 @@ async fn background_loop() {
     let _ = dm.ensure_dirs().await;
 
     let mut queue: VecDeque<WallpaperInfo> = VecDeque::new();
+    let mut seen_urls: HashSet<String> = HashSet::new();
+    let mut total_shown: u64 = 0;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
     let mut seconds_left = config.rotation_interval_secs;
     let mut config = config;
@@ -59,11 +66,7 @@ async fn background_loop() {
                 // Time to change wallpaper
                 seconds_left = config.rotation_interval_secs;
 
-                if queue.is_empty() {
-                    fetch_into_queue(&config, &mut queue).await;
-                }
-
-                if let Some(mut wp) = queue.pop_front() {
+                if let Some(mut wp) = next_unseen(&config, &mut queue, &seen_urls).await {
                     match dm.download(&mut wp).await {
                         Ok(path) => {
                             if config.theme_filter != "any" {
@@ -77,6 +80,10 @@ async fn background_loop() {
                                 };
                                 if skip { continue; }
                             }
+                            mark_seen(&mut seen_urls, &wp);
+                            total_shown += 1;
+                            tray::set_counter(total_shown);
+                            tracing::info!("Wallpaper #{total_shown}: {}", wp.title);
                             let _ = background::set_wallpaper(&path, &config.scaling_mode);
                         }
                         Err(e) => tracing::warn!("Download failed: {e}"),
@@ -101,11 +108,11 @@ async fn background_loop() {
                         }
                     }
                     TrayAction::NextWallpaper => {
-                        if queue.is_empty() {
-                            fetch_into_queue(&config, &mut queue).await;
-                        }
-                        if let Some(mut wp) = queue.pop_front() {
+                        if let Some(mut wp) = next_unseen(&config, &mut queue, &seen_urls).await {
                             if let Ok(path) = dm.download(&mut wp).await {
+                                mark_seen(&mut seen_urls, &wp);
+                                total_shown += 1;
+                                tray::set_counter(total_shown);
                                 let _ = background::set_wallpaper(&path, &config.scaling_mode);
                             }
                         }
@@ -141,16 +148,56 @@ async fn background_loop() {
 async fn fetch_into_queue(config: &PaperyConfig, queue: &mut VecDeque<WallpaperInfo>) {
     let providers = build_providers(config);
     for provider in &providers {
-        match provider.fetch_wallpapers(5).await {
+        match provider.fetch_wallpapers(15).await {
             Ok(wps) => queue.extend(wps),
             Err(e) => tracing::warn!("Failed to fetch from {}: {e}", provider.name()),
         }
     }
-    // Shuffle
     let mut v: Vec<_> = queue.drain(..).collect();
     use rand::seq::SliceRandom;
     v.shuffle(&mut rand::rng());
     queue.extend(v);
+}
+
+/// Pop the next wallpaper from the queue that hasn't been shown yet.
+/// Refetches up to 3 times if the queue is empty or full of duplicates.
+async fn next_unseen(
+    config: &PaperyConfig,
+    queue: &mut VecDeque<WallpaperInfo>,
+    seen: &HashSet<String>,
+) -> Option<WallpaperInfo> {
+    for _ in 0..3 {
+        while let Some(wp) = queue.pop_front() {
+            let key = wallpaper_key(&wp);
+            if !seen.contains(&key) {
+                return Some(wp);
+            }
+        }
+        fetch_into_queue(config, queue).await;
+        if queue.is_empty() {
+            return None;
+        }
+    }
+    // All sources exhausted with seen wallpapers — return any.
+    queue.pop_front()
+}
+
+fn wallpaper_key(wp: &WallpaperInfo) -> String {
+    if !wp.url.is_empty() {
+        wp.url.clone()
+    } else if let Some(ref p) = wp.local_path {
+        p.to_string_lossy().to_string()
+    } else {
+        wp.title.clone()
+    }
+}
+
+fn mark_seen(seen: &mut HashSet<String>, wp: &WallpaperInfo) {
+    if seen.len() >= SEEN_URLS_CAP {
+        // Reset when full so we don't permanently exhaust sources.
+        seen.clear();
+    }
+    seen.insert(wallpaper_key(wp));
 }
 
 fn build_providers(config: &PaperyConfig) -> Vec<Box<dyn WallpaperProvider>> {
@@ -173,6 +220,12 @@ fn build_providers(config: &PaperyConfig) -> Vec<Box<dyn WallpaperProvider>> {
     if config.source_local {
         let folders: Vec<PathBuf> = config.local_folders.iter().map(PathBuf::from).collect();
         providers.push(Box::new(LocalProvider::new(folders)));
+    }
+    if config.source_unsplash {
+        providers.push(Box::new(UnsplashProvider::new(&config.unsplash_topic)));
+    }
+    if config.source_pexels && !config.pexels_api_key.is_empty() {
+        providers.push(Box::new(PexelsProvider::new(&config.pexels_api_key)));
     }
     providers
 }
