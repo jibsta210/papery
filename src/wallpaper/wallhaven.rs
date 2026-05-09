@@ -1,6 +1,36 @@
 use super::{ProviderError, SourceKind, WallpaperInfo, WallpaperProvider};
 use serde::Deserialize;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::OnceLock;
+
+fn last_page_file() -> Option<std::path::PathBuf> {
+    directories::BaseDirs::new()
+        .map(|d| d.cache_dir().join("papery").join("wallhaven_last_page"))
+}
+
+fn load_persisted_last_page() -> Option<u32> {
+    let path = last_page_file()?;
+    let s = std::fs::read_to_string(&path).ok()?;
+    s.trim().parse().ok()
+}
+
+fn persist_last_page(p: u32) {
+    if let Some(path) = last_page_file() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&path, p.to_string());
+    }
+}
+
+static LOAD_ONCE: OnceLock<()> = OnceLock::new();
+fn ensure_loaded() {
+    LOAD_ONCE.get_or_init(|| {
+        if let Some(p) = load_persisted_last_page() {
+            LAST_PAGE.store(p, Ordering::Relaxed);
+        }
+    });
+}
 
 pub struct WallhavenProvider {
     pub categories: String,
@@ -17,8 +47,9 @@ impl WallhavenProvider {
 }
 
 /// Cached last_page across calls so we know how far we can sample.
-/// Initialized to a conservative guess; refined from each response.
-static LAST_PAGE: AtomicU32 = AtomicU32::new(500);
+/// Initialized to a high estimate matching Wallhaven's actual catalog
+/// (~20k pages for general+SFW); refined from each response.
+static LAST_PAGE: AtomicU32 = AtomicU32::new(15000);
 
 #[derive(Deserialize)]
 struct WallhavenResponse {
@@ -60,6 +91,7 @@ impl WallpaperProvider for WallhavenProvider {
         let categories = self.categories.clone();
         let purity = self.purity.clone();
         Box::pin(async move {
+            ensure_loaded();
             // Pick a random page within the last known total. Wallhaven's
             // unauthenticated `random` sort with a fresh seed each call gives
             // genuinely different results, but capping the page meant we were
@@ -73,11 +105,15 @@ impl WallpaperProvider for WallhavenProvider {
             let resp: WallhavenResponse = super::http_client().get(&url).send().await?.json().await?;
 
             // Update the global last_page cache so future fetches sample the
-            // full range. Only grow it (don't shrink on empty responses).
+            // full range. Persist to disk so the next process starts with
+            // the right value.
             if let Some(meta) = resp.meta {
                 if let Some(lp) = meta.last_page {
                     if lp > 0 {
-                        LAST_PAGE.store(lp, Ordering::Relaxed);
+                        let prev = LAST_PAGE.swap(lp, Ordering::Relaxed);
+                        if prev != lp {
+                            persist_last_page(lp);
+                        }
                     }
                 }
             }
