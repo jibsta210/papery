@@ -37,7 +37,7 @@ impl WallpaperProvider for BingProvider {
             // Bing only keeps ~8 days, but combined with markets gives some variety.
             let markets = ["en-US", "en-GB", "en-CA", "en-AU", "ja-JP", "de-DE", "fr-FR", "zh-CN"];
             let mkt = markets[(rand::random::<u32>() as usize) % markets.len()];
-            let idx = rand::random::<u32>() % 7;
+            let idx = rand::random::<u32>() % 8;
             let url = format!(
                 "https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n={n}&mkt={mkt}"
             );

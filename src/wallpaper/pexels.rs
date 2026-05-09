@@ -1,5 +1,9 @@
 use super::{http_client, ProviderError, SourceKind, WallpaperInfo, WallpaperProvider};
 use serde::Deserialize;
+use std::sync::atomic::{AtomicU32, Ordering};
+
+/// Cached last_page (computed from total_results / per_page).
+static LAST_PAGE: AtomicU32 = AtomicU32::new(200);
 
 pub struct PexelsProvider {
     pub api_key: String,
@@ -16,6 +20,10 @@ impl PexelsProvider {
 #[derive(Deserialize)]
 struct PexelsResponse {
     photos: Vec<PexelsPhoto>,
+    #[serde(default)]
+    total_results: Option<u32>,
+    #[serde(default)]
+    per_page: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -58,9 +66,9 @@ impl WallpaperProvider for PexelsProvider {
                 ));
             }
 
-            let per_page = count.clamp(1, 80);
-            // Pick a random page within the curated photos to vary results
-            let page = (rand::random::<u32>() % 50) + 1;
+            let per_page = count.clamp(1, 80) as u32;
+            let last_page = LAST_PAGE.load(Ordering::Relaxed).max(1);
+            let page = (rand::random::<u32>() % last_page) + 1;
             let url = format!(
                 "https://api.pexels.com/v1/curated?per_page={per_page}&page={page}"
             );
@@ -71,6 +79,13 @@ impl WallpaperProvider for PexelsProvider {
                 .await?
                 .error_for_status()?;
             let body: PexelsResponse = resp.json().await?;
+
+            // Refresh the cached last_page from total_results / per_page
+            if let (Some(total), Some(pp)) = (body.total_results, body.per_page) {
+                if pp > 0 && total > 0 {
+                    LAST_PAGE.store((total + pp - 1) / pp, Ordering::Relaxed);
+                }
+            }
 
             let wallpapers = body
                 .photos

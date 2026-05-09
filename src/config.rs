@@ -46,10 +46,32 @@ pub struct PaperyConfig {
     pub favorites: Vec<String>,
 
     /// Wallhaven categories (100 = general, 010 = anime, 001 = people)
+    /// Kept for backwards compat; computed from the bools below at runtime.
     pub wallhaven_categories: String,
 
     /// Wallhaven purity (100 = SFW)
     pub wallhaven_purity: String,
+
+    /// Wallhaven category toggles (multi-select)
+    pub wallhaven_general: bool,
+    pub wallhaven_anime: bool,
+    pub wallhaven_people: bool,
+}
+
+impl PaperyConfig {
+    /// Compute the Wallhaven categories binary string from the toggle bools.
+    /// Falls back to "100" (general only) if all are off.
+    pub fn wallhaven_categories_str(&self) -> String {
+        let g = if self.wallhaven_general { '1' } else { '0' };
+        let a = if self.wallhaven_anime { '1' } else { '0' };
+        let p = if self.wallhaven_people { '1' } else { '0' };
+        let s: String = [g, a, p].iter().collect();
+        if s == "000" {
+            "100".to_string()
+        } else {
+            s
+        }
+    }
 }
 
 impl Default for PaperyConfig {
@@ -79,6 +101,9 @@ impl Default for PaperyConfig {
 
             wallhaven_categories: "100".to_string(),
             wallhaven_purity: "100".to_string(),
+            wallhaven_general: true,
+            wallhaven_anime: false,
+            wallhaven_people: false,
         }
     }
 }

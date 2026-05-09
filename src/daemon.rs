@@ -69,6 +69,17 @@ async fn background_loop() {
                 if let Some(mut wp) = next_unseen(&config, &mut queue, &seen_urls).await {
                     match dm.download(&mut wp).await {
                         Ok(path) => {
+                            // Skip broken/all-gray placeholder images
+                            let broken_path = path.clone();
+                            let is_broken = tokio::task::spawn_blocking(move || brightness::is_broken(&broken_path))
+                                .await
+                                .unwrap_or(false);
+                            if is_broken {
+                                tracing::info!("Skipping broken/blank wallpaper: {}", wp.title);
+                                mark_seen(&mut seen_urls, &wp);
+                                continue;
+                            }
+
                             if config.theme_filter != "any" {
                                 let skip = match tokio::task::spawn_blocking({
                                     let p = path.clone();
@@ -210,7 +221,7 @@ fn build_providers(config: &PaperyConfig) -> Vec<Box<dyn WallpaperProvider>> {
     }
     if config.source_wallhaven {
         providers.push(Box::new(WallhavenProvider::new(
-            &config.wallhaven_categories,
+            &config.wallhaven_categories_str(),
             &config.wallhaven_purity,
         )));
     }

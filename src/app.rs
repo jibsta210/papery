@@ -86,6 +86,9 @@ pub enum Message {
     ToggleSourceLocal,
     ToggleSourceUnsplash,
     ToggleSourcePexels,
+    ToggleWallhavenGeneral,
+    ToggleWallhavenAnime,
+    ToggleWallhavenPeople,
     SetRotationInterval(u64),
     SetIntervalHours(String),
     SetIntervalMinutes(String),
@@ -371,6 +374,18 @@ impl cosmic::Application for Papery {
                 self.config.source_pexels = !self.config.source_pexels;
                 self.save_config();
             }
+            Message::ToggleWallhavenGeneral => {
+                self.config.wallhaven_general = !self.config.wallhaven_general;
+                self.save_config();
+            }
+            Message::ToggleWallhavenAnime => {
+                self.config.wallhaven_anime = !self.config.wallhaven_anime;
+                self.save_config();
+            }
+            Message::ToggleWallhavenPeople => {
+                self.config.wallhaven_people = !self.config.wallhaven_people;
+                self.save_config();
+            }
             Message::SetRotationInterval(secs) => {
                 self.config.rotation_interval_secs = secs;
                 self.seconds_until_next = secs;
@@ -577,7 +592,7 @@ impl Papery {
         }
         if self.config.source_wallhaven {
             providers.push(Box::new(WallhavenProvider::new(
-                &self.config.wallhaven_categories,
+                &self.config.wallhaven_categories_str(),
                 &self.config.wallhaven_purity,
             )));
         }
@@ -657,9 +672,21 @@ impl Papery {
                 let dm = DownloadManager::new(cache_dir);
                 match dm.download(&mut wp).await {
                     Ok(path) => {
+                        // Skip broken/all-gray placeholders
+                        let broken_path = path.clone();
+                        let broken = tokio::task::spawn_blocking(move || {
+                            brightness::is_broken(&broken_path)
+                        })
+                        .await
+                        .unwrap_or(false);
+                        if broken {
+                            tracing::info!("Skipping broken wallpaper: {}", wp.title);
+                            return Message::FetchMore;
+                        }
                         if theme_filter != "any" {
+                            let theme_path = path.clone();
                             if let Ok(b) = tokio::task::spawn_blocking(move || {
-                                brightness::analyze_brightness(&path)
+                                brightness::analyze_brightness(&theme_path)
                             })
                             .await
                             {

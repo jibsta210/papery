@@ -5,6 +5,18 @@ use cosmic::iced::{Alignment, Length};
 use cosmic::widget;
 use cosmic::Element;
 
+fn category_chip<'a>(label: &'a str, enabled: bool, on_press: Message) -> Element<'a, Message> {
+    let style = if enabled {
+        cosmic::theme::Button::Suggested
+    } else {
+        cosmic::theme::Button::Standard
+    };
+    widget::button::text(label.to_string())
+        .on_press(on_press)
+        .class(style)
+        .into()
+}
+
 pub fn view(config: &PaperyConfig) -> Element<'_, Message> {
     let spacing = cosmic::theme::spacing();
 
@@ -30,6 +42,31 @@ pub fn view(config: &PaperyConfig) -> Element<'_, Message> {
             config.source_wallhaven,
             Message::ToggleSourceWallhaven,
         ))
+        .push_maybe(if config.source_wallhaven {
+            Some(
+                widget::Row::new()
+                    .push(widget::Space::new().width(spacing.space_l))
+                    .push(category_chip(
+                        "General",
+                        config.wallhaven_general,
+                        Message::ToggleWallhavenGeneral,
+                    ))
+                    .push(category_chip(
+                        "Anime",
+                        config.wallhaven_anime,
+                        Message::ToggleWallhavenAnime,
+                    ))
+                    .push(category_chip(
+                        "People",
+                        config.wallhaven_people,
+                        Message::ToggleWallhavenPeople,
+                    ))
+                    .spacing(spacing.space_xs)
+                    .align_y(Alignment::Center),
+            )
+        } else {
+            None
+        })
         .push(source_toggle(
             fl!("source-earthview"),
             fl!("source-earthview-description"),
