@@ -36,7 +36,7 @@ pub struct Papery {
     pub history: Vec<WallpaperInfo>,
     pub history_index: usize,
     wallpaper_queue: VecDeque<WallpaperInfo>,
-    seen_urls: std::collections::HashSet<String>,
+    seen_urls: crate::seen::SeenStore,
     pub total_shown: u64,
 
     // Timer state
@@ -177,7 +177,7 @@ impl cosmic::Application for Papery {
             history: Vec::new(),
             history_index: 0,
             wallpaper_queue: VecDeque::new(),
-            seen_urls: std::collections::HashSet::new(),
+            seen_urls: crate::seen::SeenStore::load(&download_manager.cache_dir),
             total_shown: 0,
             seconds_until_next: 0,
             last_tick: None,
@@ -308,10 +308,8 @@ impl cosmic::Application for Papery {
             Message::WallpaperReady(result) => match result {
                 Ok(wp) => {
                     let key = wallpaper_key(&wp);
-                    if self.seen_urls.len() >= 1000 {
-                        self.seen_urls.clear();
-                    }
                     self.seen_urls.insert(key);
+                    self.seen_urls.save();
                     self.total_shown += 1;
                     tray::set_counter(self.total_shown);
 

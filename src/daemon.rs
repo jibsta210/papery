@@ -11,14 +11,12 @@ use crate::wallpaper::pexels::PexelsProvider;
 use crate::wallpaper::unsplash::UnsplashProvider;
 use crate::wallpaper::wallhaven::WallhavenProvider;
 use crate::wallpaper::{WallpaperInfo, WallpaperProvider};
+use crate::seen::SeenStore;
 use cosmic_config::CosmicConfigEntry;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-/// Cap on remembered URLs to avoid unbounded growth.
-const SEEN_URLS_CAP: usize = 1000;
 
 /// Run Papery in headless background mode: no window, just wallpaper
 /// rotation and system tray icon.
@@ -47,8 +45,10 @@ async fn background_loop() {
     let _ = dm.ensure_dirs().await;
 
     let mut queue: VecDeque<WallpaperInfo> = VecDeque::new();
-    let mut seen_urls: HashSet<String> = HashSet::new();
-    let mut total_shown: u64 = 0;
+    let mut seen_urls = SeenStore::load(&dm.cache_dir);
+    tracing::info!("Loaded {} previously-seen wallpaper URLs", seen_urls.len());
+    let mut total_shown: u64 = seen_urls.len() as u64;
+    tray::set_counter(total_shown);
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
     let mut seconds_left = config.rotation_interval_secs;
     let mut config = config;
@@ -171,13 +171,13 @@ async fn fetch_into_queue(config: &PaperyConfig, queue: &mut VecDeque<WallpaperI
 }
 
 /// Pop the next wallpaper from the queue that hasn't been shown yet.
-/// Refetches up to 3 times if the queue is empty or full of duplicates.
+/// Refetches up to 5 times if the queue is empty or full of duplicates.
 async fn next_unseen(
     config: &PaperyConfig,
     queue: &mut VecDeque<WallpaperInfo>,
-    seen: &HashSet<String>,
+    seen: &SeenStore,
 ) -> Option<WallpaperInfo> {
-    for _ in 0..3 {
+    for _ in 0..5 {
         while let Some(wp) = queue.pop_front() {
             let key = wallpaper_key(&wp);
             if !seen.contains(&key) {
@@ -203,12 +203,9 @@ fn wallpaper_key(wp: &WallpaperInfo) -> String {
     }
 }
 
-fn mark_seen(seen: &mut HashSet<String>, wp: &WallpaperInfo) {
-    if seen.len() >= SEEN_URLS_CAP {
-        // Reset when full so we don't permanently exhaust sources.
-        seen.clear();
-    }
+fn mark_seen(seen: &mut SeenStore, wp: &WallpaperInfo) {
     seen.insert(wallpaper_key(wp));
+    seen.save();
 }
 
 fn build_providers(config: &PaperyConfig) -> Vec<Box<dyn WallpaperProvider>> {

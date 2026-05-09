@@ -7,5 +7,6 @@ pub mod download;
 mod localize;
 pub mod pages;
 pub mod scheduler;
+pub mod seen;
 pub mod tray;
 pub mod wallpaper;
