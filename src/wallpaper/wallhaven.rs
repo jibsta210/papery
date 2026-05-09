@@ -92,15 +92,17 @@ impl WallpaperProvider for WallhavenProvider {
         let purity = self.purity.clone();
         Box::pin(async move {
             ensure_loaded();
-            // Pick a random page within the last known total. Wallhaven's
-            // unauthenticated `random` sort with a fresh seed each call gives
-            // genuinely different results, but capping the page meant we were
-            // missing 99% of wallhaven's catalog (20k+ pages exist).
+            // We were using `sorting=random&seed=X` but Wallhaven's random sort
+            // appears to draw from a narrower curated pool than the full
+            // catalog, so the same popular wallpapers kept coming back.
+            //
+            // Switch to `sorting=date_added` with a random page across the full
+            // ~20k pages. Page N and page M return wallpapers uploaded at
+            // entirely different times — there is no overlap possible.
             let last_page = LAST_PAGE.load(Ordering::Relaxed).max(1);
-            let seed: u32 = rand::random();
             let page: u32 = (rand::random::<u32>() % last_page) + 1;
             let url = format!(
-                "https://wallhaven.cc/api/v1/search?categories={categories}&purity={purity}&sorting=random&seed={seed}&page={page}&atleast=1920x1080"
+                "https://wallhaven.cc/api/v1/search?categories={categories}&purity={purity}&sorting=date_added&order=desc&page={page}&atleast=1920x1080"
             );
             let resp: WallhavenResponse = super::http_client().get(&url).send().await?.json().await?;
 

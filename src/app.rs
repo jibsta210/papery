@@ -290,9 +290,27 @@ impl cosmic::Application for Papery {
                 self.is_fetching = false;
                 match result {
                     Ok(wallpapers) => {
+                        // Reload seen.json from disk so we pick up writes from
+                        // the daemon process if it's been running too.
+                        self.seen_urls = crate::seen::SeenStore::load(
+                            &self.download_manager.cache_dir,
+                        );
+                        // Filter out anything already seen OR already queued.
+                        let in_queue: std::collections::HashSet<String> =
+                            self.wallpaper_queue.iter().map(wallpaper_key).collect();
+                        let mut added = 0;
                         for wp in wallpapers {
+                            let k = wallpaper_key(&wp);
+                            if self.seen_urls.contains(&k) || in_queue.contains(&k) {
+                                continue;
+                            }
                             self.wallpaper_queue.push_back(wp);
+                            added += 1;
                         }
+                        tracing::info!(
+                            "Queued {added} new wallpapers (queue: {})",
+                            self.wallpaper_queue.len()
+                        );
                         self.status_message = None;
                         if self.current_wallpaper.is_none() && !self.wallpaper_queue.is_empty() {
                             return self.set_next_wallpaper();
@@ -477,12 +495,7 @@ impl cosmic::Application for Papery {
 
         if self.total_shown > 0 {
             elements.push(
-                widget::text::caption(format!(
-                    "  #{}  ·  queue: {}",
-                    self.total_shown,
-                    self.wallpaper_queue.len()
-                ))
-                .into(),
+                widget::text::caption(format!("  #{}", self.total_shown)).into(),
             );
         }
 
@@ -657,9 +670,17 @@ impl Papery {
         while let Some(wp) = self.wallpaper_queue.pop_front() {
             let key = wallpaper_key(&wp);
             if !self.seen_urls.contains(&key) {
+                // Mark seen IMMEDIATELY so rapid Next clicks don't pick it
+                // again from another queue entry that pre-existed.
+                self.seen_urls.insert(key);
+                self.seen_urls.save();
                 chosen = Some(wp);
                 break;
             }
+        }
+        if chosen.is_none() {
+            // Queue exhausted of unseen — kick a fetch and retry once it lands.
+            return self.fetch_wallpapers();
         }
         if let Some(mut wp) = chosen {
             let cache_dir = self.download_manager.cache_dir.clone();
