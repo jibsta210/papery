@@ -223,11 +223,9 @@ impl cosmic::Application for Papery {
     fn update(&mut self, message: Self::Message) -> app::Task<Self::Message> {
         match message {
             Message::NextWallpaper => {
-                if self.history_index + 1 < self.history.len() {
-                    self.history_index += 1;
-                    let wp = self.history[self.history_index].clone();
-                    return self.apply_wallpaper(wp);
-                }
+                // Always pull a fresh wallpaper. Previous already steps back
+                // through history; Next doesn't need to step forward through
+                // it (which was masking new picks behind stale history items).
                 return self.set_next_wallpaper();
             }
 
@@ -665,21 +663,30 @@ impl Papery {
     }
 
     fn set_next_wallpaper(&mut self) -> app::Task<Message> {
-        // Pop until we find one we haven't shown yet
+        // Weighted random pick: source picked by pool_size / total_pool, then
+        // a random wallpaper within that source. We loop until we find one not
+        // already in seen_urls. If we exhaust the queue without an unseen
+        // pick, trigger a fetch.
         let mut chosen: Option<WallpaperInfo> = None;
-        while let Some(wp) = self.wallpaper_queue.pop_front() {
-            let key = wallpaper_key(&wp);
-            if !self.seen_urls.contains(&key) {
-                // Mark seen IMMEDIATELY so rapid Next clicks don't pick it
-                // again from another queue entry that pre-existed.
-                self.seen_urls.insert(key);
-                self.seen_urls.save();
-                chosen = Some(wp);
+        let mut attempts = 0;
+        while !self.wallpaper_queue.is_empty() && attempts < 200 {
+            attempts += 1;
+            let Some(idx) = crate::wallpaper::weighted_pop_index(&self.wallpaper_queue) else {
                 break;
+            };
+            let Some(wp) = self.wallpaper_queue.remove(idx) else {
+                break;
+            };
+            let key = wallpaper_key(&wp);
+            if self.seen_urls.contains(&key) {
+                continue;
             }
+            self.seen_urls.insert(key);
+            self.seen_urls.save();
+            chosen = Some(wp);
+            break;
         }
         if chosen.is_none() {
-            // Queue exhausted of unseen — kick a fetch and retry once it lands.
             return self.fetch_wallpapers();
         }
         if let Some(mut wp) = chosen {
@@ -731,7 +738,7 @@ impl Papery {
         self.fetch_wallpapers()
     }
 
-    fn apply_wallpaper(&self, wp: WallpaperInfo) -> app::Task<Message> {
+    fn apply_wallpaper(&mut self, wp: WallpaperInfo) -> app::Task<Message> {
         if let Some(ref path) = wp.local_path {
             match background::set_wallpaper(path, &self.config.scaling_mode) {
                 Ok(()) => {}
@@ -740,6 +747,8 @@ impl Papery {
                 }
             }
         }
+        // Update current_wallpaper so the header title reflects the change.
+        self.current_wallpaper = Some(wp);
         Task::none()
     }
 }

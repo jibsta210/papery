@@ -170,15 +170,24 @@ async fn fetch_into_queue(config: &PaperyConfig, queue: &mut VecDeque<WallpaperI
     queue.extend(v);
 }
 
-/// Pop the next wallpaper from the queue that hasn't been shown yet.
-/// Refetches up to 5 times if the queue is empty or full of duplicates.
+/// Pop the next wallpaper from the queue that hasn't been shown yet, using
+/// pool-size-weighted random selection so small sources (Bing's ~64) don't
+/// dominate over huge ones (Wallhaven's 1M+).
 async fn next_unseen(
     config: &PaperyConfig,
     queue: &mut VecDeque<WallpaperInfo>,
     seen: &SeenStore,
 ) -> Option<WallpaperInfo> {
     for _ in 0..5 {
-        while let Some(wp) = queue.pop_front() {
+        let mut attempts = 0;
+        while !queue.is_empty() && attempts < 200 {
+            attempts += 1;
+            let Some(idx) = crate::wallpaper::weighted_pop_index(queue) else {
+                break;
+            };
+            let Some(wp) = queue.remove(idx) else {
+                break;
+            };
             let key = wallpaper_key(&wp);
             if !seen.contains(&key) {
                 return Some(wp);
@@ -189,7 +198,6 @@ async fn next_unseen(
             return None;
         }
     }
-    // All sources exhausted with seen wallpapers — return any.
     queue.pop_front()
 }
 
