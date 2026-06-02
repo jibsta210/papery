@@ -121,28 +121,39 @@ fn set_wallpaper_cosmic(image_path: &Path, scaling: &str) -> Result<(), Backgrou
 }
 
 fn set_wallpaper_kde(image_path: &Path, scaling: &str) -> Result<(), BackgroundError> {
-    // First try plasma-apply-wallpaperimage which is the modern, simple way.
-    let out = std::process::Command::new("plasma-apply-wallpaperimage")
-        .arg(image_path)
-        .output();
-
-    let primary_result = match out {
-        Ok(o) if o.status.success() => {
-            tracing::info!("Wallpaper set (kde): {}", image_path.display());
-            let _ = apply_kde_scaling(scaling);
-            Ok(())
-        }
-        Ok(o) => {
-            tracing::warn!(
-                "plasma-apply-wallpaperimage failed (status {:?}): {}; falling back to qdbus6",
-                o.status.code(),
-                String::from_utf8_lossy(&o.stderr)
-            );
-            set_wallpaper_kde_qdbus(image_path, scaling)
-        }
-        Err(e) => {
-            tracing::warn!("plasma-apply-wallpaperimage not available ({e}); using qdbus6");
-            set_wallpaper_kde_qdbus(image_path, scaling)
+    // If the user has selected the Papery wallpaper plugin in Plasma, do NOT
+    // call plasma-apply-wallpaperimage or our scaling qdbus script — both
+    // would silently switch the plugin back to org.kde.image and the user's
+    // selection would revert on every rotation. The plugin reads
+    // ~/.cache/papery/current_path itself and refreshes live.
+    let primary_result = if plasma_wallpaper_plugin_is_papery() {
+        tracing::info!(
+            "Plasma is using the Papery plugin; wrote current_path={}",
+            image_path.display()
+        );
+        Ok(())
+    } else {
+        let out = std::process::Command::new("plasma-apply-wallpaperimage")
+            .arg(image_path)
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                tracing::info!("Wallpaper set (kde): {}", image_path.display());
+                let _ = apply_kde_scaling(scaling);
+                Ok(())
+            }
+            Ok(o) => {
+                tracing::warn!(
+                    "plasma-apply-wallpaperimage failed (status {:?}): {}; falling back to qdbus6",
+                    o.status.code(),
+                    String::from_utf8_lossy(&o.stderr)
+                );
+                set_wallpaper_kde_qdbus(image_path, scaling)
+            }
+            Err(e) => {
+                tracing::warn!("plasma-apply-wallpaperimage not available ({e}); using qdbus6");
+                set_wallpaper_kde_qdbus(image_path, scaling)
+            }
         }
     };
 
@@ -224,6 +235,29 @@ fn set_login_screen_kde(image_path: &Path) -> Result<(), BackgroundError> {
     // Try to copy. If we lack permission, silently ignore.
     let _ = std::fs::copy(image_path, &sddm_target);
     Ok(())
+}
+
+/// Return true if any Plasma containment is currently using the Papery
+/// wallpaper plugin. If so, we should NOT call plasma-apply-wallpaperimage
+/// or write `wallpaperPlugin = 'org.kde.image'` because that overrides the
+/// user's choice and the setting silently reverts on every rotation.
+fn plasma_wallpaper_plugin_is_papery() -> bool {
+    let Some(dirs) = directories::BaseDirs::new() else {
+        return false;
+    };
+    let path = dirs
+        .config_dir()
+        .join("plasma-org.kde.plasma.desktop-appletsrc");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    // The active wallpaper plugin is recorded per Containment in lines like
+    //   wallpaperplugin=dev.papery.wallpaper
+    // (the key casing is lowercase in this config file).
+    content.lines().any(|l| {
+        let lower = l.trim().to_ascii_lowercase();
+        lower == "wallpaperplugin=dev.papery.wallpaper"
+    })
 }
 
 fn kde_fill_mode(scaling: &str) -> i32 {
