@@ -156,7 +156,9 @@ async fn background_loop() {
             }
         }
 
-        // Reload config periodically
+        // Reload config periodically. cosmic-config doesn't always watch
+        // files reliably (especially on non-COSMIC desktops), so also read
+        // the individual rotation_interval_secs file directly as a fallback.
         if let Some(ref h) = config_handler {
             if let Ok(new_config) = PaperyConfig::get_entry(h) {
                 if new_config.rotation_interval_secs != config.rotation_interval_secs {
@@ -164,6 +166,23 @@ async fn background_loop() {
                 }
                 config = new_config;
                 paused.store(config.paused, Ordering::Relaxed);
+            }
+        }
+        if let Some(dirs) = directories::BaseDirs::new() {
+            let p = dirs
+                .config_dir()
+                .join("cosmic")
+                .join(APP_ID)
+                .join("v1")
+                .join("rotation_interval_secs");
+            if let Ok(s) = std::fs::read_to_string(&p) {
+                if let Ok(v) = s.trim().parse::<u64>() {
+                    if v > 0 && v != config.rotation_interval_secs {
+                        tracing::info!("Rotation interval changed: {} -> {} secs", config.rotation_interval_secs, v);
+                        config.rotation_interval_secs = v;
+                        seconds_left = v;
+                    }
+                }
             }
         }
     }
