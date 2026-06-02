@@ -126,16 +126,13 @@ fn set_wallpaper_kde(image_path: &Path, scaling: &str) -> Result<(), BackgroundE
         .arg(image_path)
         .output();
 
-    match out {
+    let primary_result = match out {
         Ok(o) if o.status.success() => {
             tracing::info!("Wallpaper set (kde): {}", image_path.display());
-            // plasma-apply-wallpaperimage doesn't expose a scaling option, so
-            // follow up with a qdbus6 script to set FillMode if needed.
             let _ = apply_kde_scaling(scaling);
             Ok(())
         }
         Ok(o) => {
-            // Fall back to qdbus6 script injection.
             tracing::warn!(
                 "plasma-apply-wallpaperimage failed (status {:?}): {}; falling back to qdbus6",
                 o.status.code(),
@@ -147,7 +144,86 @@ fn set_wallpaper_kde(image_path: &Path, scaling: &str) -> Result<(), BackgroundE
             tracing::warn!("plasma-apply-wallpaperimage not available ({e}); using qdbus6");
             set_wallpaper_kde_qdbus(image_path, scaling)
         }
+    };
+
+    // Best-effort: also update the lock screen image. Only if it's currently
+    // configured to use the org.kde.image plugin (the user hasn't picked a
+    // dynamic plugin like dev.papery.wallpaper or org.kde.potd themselves).
+    let _ = set_lockscreen_kde(image_path, scaling);
+
+    // Best-effort: refresh the SDDM login background if the helper is set up.
+    let _ = set_login_screen_kde(image_path);
+
+    primary_result
+}
+
+/// Update the lock-screen wallpaper. If the user has already switched the
+/// lock screen to our Papery plugin, do nothing (the plugin reads the
+/// current path itself). Otherwise update the org.kde.image plugin's Image
+/// and FillMode keys.
+fn set_lockscreen_kde(image_path: &Path, scaling: &str) -> Result<(), BackgroundError> {
+    let current_plugin = std::process::Command::new("kreadconfig6")
+        .args(["--file", "kscreenlockerrc", "--group", "Greeter", "--key", "WallpaperPlugin"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    if current_plugin == "dev.papery.wallpaper" {
+        // Plugin already handles this — reads current_path live.
+        return Ok(());
     }
+
+    let uri = format!("file://{}", image_path.display());
+    let fill = kde_fill_mode(scaling).to_string();
+
+    let _ = std::process::Command::new("kwriteconfig6")
+        .args(&[
+            "--file", "kscreenlockerrc",
+            "--group", "Greeter",
+            "--key", "WallpaperPlugin",
+            "org.kde.image",
+        ])
+        .output();
+    let _ = std::process::Command::new("kwriteconfig6")
+        .args(&[
+            "--file", "kscreenlockerrc",
+            "--group", "Greeter",
+            "--group", "Wallpaper",
+            "--group", "org.kde.image",
+            "--group", "General",
+            "--key", "Image",
+            &uri,
+        ])
+        .output();
+    let _ = std::process::Command::new("kwriteconfig6")
+        .args(&[
+            "--file", "kscreenlockerrc",
+            "--group", "Greeter",
+            "--group", "Wallpaper",
+            "--group", "org.kde.image",
+            "--group", "General",
+            "--key", "FillMode",
+            &fill,
+        ])
+        .output();
+    Ok(())
+}
+
+/// Copy the current wallpaper to a system-readable path so the SDDM login
+/// screen can render it. Requires a one-time root setup: the user runs
+/// `sudo papery --setup-sddm` which installs a writable cache directory
+/// (or a polkit rule). Without that setup, this is a no-op.
+fn set_login_screen_kde(image_path: &Path) -> Result<(), BackgroundError> {
+    let sddm_target = std::path::PathBuf::from("/var/lib/papery/current.jpg");
+    if let Some(parent) = sddm_target.parent() {
+        if !parent.exists() {
+            // Setup hasn't been done — silent no-op.
+            return Ok(());
+        }
+    }
+    // Try to copy. If we lack permission, silently ignore.
+    let _ = std::fs::copy(image_path, &sddm_target);
+    Ok(())
 }
 
 fn kde_fill_mode(scaling: &str) -> i32 {
