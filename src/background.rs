@@ -87,20 +87,30 @@ pub fn set_wallpaper(image_path: &Path, scaling: &str) -> Result<(), BackgroundE
     }
 }
 
-/// Write the active wallpaper path to ~/.cache/papery/current_path so that
-/// the KDE Papery plugin (and anything else watching) can pick it up.
+/// Publish the active wallpaper to ~/.cache/papery/ for the KDE Papery
+/// wallpaper plugin (and anything else watching). Writes both:
+///   - current_path  (text file with the wallpaper path)
+///   - current.jpg   (symlink to the wallpaper, polled by the QML plugin)
 fn write_current_path(image_path: &Path) {
     let Some(dirs) = directories::BaseDirs::new() else {
         return;
     };
     let papery_cache = dirs.cache_dir().join("papery");
     let _ = std::fs::create_dir_all(&papery_cache);
+
+    // Text path for diagnostic / scripted consumers.
     let state = papery_cache.join("current_path");
     let tmp = papery_cache.join("current_path.tmp");
     let content = image_path.to_string_lossy().into_owned();
     if std::fs::write(&tmp, &content).is_ok() {
         let _ = std::fs::rename(&tmp, &state);
     }
+
+    // Symlink the QML plugin loads directly. Use a stable filename so the
+    // plugin can bind to a fixed file:// URL and only cache-bust on changes.
+    let symlink_path = papery_cache.join("current.jpg");
+    let _ = std::fs::remove_file(&symlink_path);
+    let _ = std::os::unix::fs::symlink(image_path, &symlink_path);
 }
 
 fn set_wallpaper_cosmic(image_path: &Path, scaling: &str) -> Result<(), BackgroundError> {
