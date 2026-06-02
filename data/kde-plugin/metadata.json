@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Papery Contributors"
+            }
+        ],
+        "Category": "Wallpaper",
+        "Description": "Auto-rotating wallpaper from Papery (Bing, NASA, Wallhaven, ...)",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "dev.papery.wallpaper",
+        "License": "GPL-3.0-only",
+        "Name": "Papery",
+        "Version": "0.1.0",
+        "Website": "https://github.com/jibsta210/papery"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

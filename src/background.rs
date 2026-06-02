@@ -74,15 +74,32 @@ pub fn scaling_mode_from_str(s: &str) -> ScalingMode {
 }
 
 pub fn set_wallpaper(image_path: &Path, scaling: &str) -> Result<(), BackgroundError> {
+    // Always publish the current path so the KDE wallpaper plugin (and any
+    // other consumer) can render it directly, regardless of which backend
+    // ended up handling the system-level set.
+    write_current_path(image_path);
+
     match detect_desktop() {
         Desktop::Cosmic => set_wallpaper_cosmic(image_path, scaling),
         Desktop::Kde => set_wallpaper_kde(image_path, scaling),
         Desktop::Gnome => set_wallpaper_gnome(image_path),
-        Desktop::Other => {
-            // Last-resort: try COSMIC. If the user has cosmic-bg installed
-            // but isn't running COSMIC the call will fail gracefully.
-            set_wallpaper_cosmic(image_path, scaling)
-        }
+        Desktop::Other => set_wallpaper_cosmic(image_path, scaling),
+    }
+}
+
+/// Write the active wallpaper path to ~/.cache/papery/current_path so that
+/// the KDE Papery plugin (and anything else watching) can pick it up.
+fn write_current_path(image_path: &Path) {
+    let Some(dirs) = directories::BaseDirs::new() else {
+        return;
+    };
+    let papery_cache = dirs.cache_dir().join("papery");
+    let _ = std::fs::create_dir_all(&papery_cache);
+    let state = papery_cache.join("current_path");
+    let tmp = papery_cache.join("current_path.tmp");
+    let content = image_path.to_string_lossy().into_owned();
+    if std::fs::write(&tmp, &content).is_ok() {
+        let _ = std::fs::rename(&tmp, &state);
     }
 }
 

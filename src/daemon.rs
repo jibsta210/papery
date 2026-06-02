@@ -53,15 +53,28 @@ async fn background_loop() {
     let mut seconds_left = config.rotation_interval_secs;
     let mut config = config;
 
+    // External trigger file watched by the KDE plugin (and any caller who
+    // wants to bump rotation without going through D-Bus/tray).
+    let trigger_path = dm.cache_dir.join("trigger_next");
+    let _ = std::fs::remove_file(&trigger_path);
+
     loop {
         tokio::select! {
             _ = interval.tick() => {
-                if paused.load(Ordering::Relaxed) {
+                // External trigger from the KDE plugin (or any caller).
+                let triggered = trigger_path.exists();
+                if triggered {
+                    let _ = std::fs::remove_file(&trigger_path);
+                }
+
+                if paused.load(Ordering::Relaxed) && !triggered {
                     continue;
                 }
-                if seconds_left > 0 {
-                    seconds_left -= 1;
-                    continue;
+                if !triggered {
+                    if seconds_left > 0 {
+                        seconds_left -= 1;
+                        continue;
+                    }
                 }
                 // Time to change wallpaper
                 seconds_left = config.rotation_interval_secs;
